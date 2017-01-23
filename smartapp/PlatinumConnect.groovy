@@ -375,11 +375,14 @@ def updateStatus() {
 			deleteChildDevice(sceneDevice.deviceNetworkId)
 		}
 	}
-	DB['scenes']?.each() { id, name ->
+	DB['scenes']?.each() { id, sceneMap ->
+		def name = sceneMap['name']
 		log.debug("processing scene ${id} with name ${name}")
 		def PREFIX = "PLATINUMGATEWAYSCENE"
-		def sceneDevice = addChildDevice("schwark", "Platinum Gateway Scene Switch", "${PREFIX}${id}", getHubId(), ["label": name])
-		sceneDevice.sceneNo = id
+		def hubId = getHubId()
+		def sceneDevice = addChildDevice("schwark", "Platinum Gateway Scene Switch", "${PREFIX}${id}", hubId, ["name": "PlatinumScene.${id}", "label": name, "completedSetup": true])
+		log.debug("created child device ${PREFIX}${id} for scene ${id} with name ${name} and hub ${hubId}")
+		sceneDevice.setSceneNo(id)
 		state.scenes[id] = sceneDevice
 	}
 }

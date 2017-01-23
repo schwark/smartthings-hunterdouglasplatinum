@@ -24,6 +24,7 @@
 metadata {
 	definition (name: "Platinum Gateway Scene Switch", namespace: "schwark", author: "Schwark Satyavolu") {
 	capability "Switch"
+	command "setSceneNo", ["string"]
 	}
 
 simulator {
@@ -38,8 +39,6 @@ tiles {
 	}
 
 preferences {
-    input name: "sceneNo", type: "number", title: "Scene Number", description: "Enter the number of Scene in your App", required: false,
-          displayDuringSetup: false
 }
 
     main "switch"
@@ -50,11 +49,15 @@ def updated() {
 }
 
 def on() {
-	return parent.runScene(sceneNo)
+	return parent.runScene(state.sceneNo)
 }
 
 def off() {
-	return parent.runScene(sceneNo)
+	return parent.runScene(state.sceneNo)
+}
+
+def setSceneNo(sceneNo) {
+	state.sceneNo = sceneNo
 }
 
 
