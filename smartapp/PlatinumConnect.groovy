@@ -331,7 +331,7 @@ def updateStatus() {
 		log.debug("processing scene ${id} with name ${name}")
 		def PREFIX = "PLATINUMGATEWAYSCENE"
 		def hubId = getHubId()
-		def sceneDevice = addChildDevice("schwark", "Platinum Gateway Scene Switch", "${PREFIX}${id}", hubId, ["name": "PlatinumScene.${id}", "label": name, "completedSetup": true])
+		def sceneDevice = addChildDevice("schwark", "Platinum Gateway Scene Switch", "${PREFIX}${id}", hubId, ["name": "PlatinumScene.${id}", "label": "Shade Scene ${name}", "completedSetup": true])
 		log.debug("created child device ${PREFIX}${id} for scene ${id} with name ${name} and hub ${hubId}")
 		sceneDevice.setSceneNo(id)
 		state.scenes[id] = sceneDevice
