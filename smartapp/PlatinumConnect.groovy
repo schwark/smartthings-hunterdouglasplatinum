@@ -40,11 +40,11 @@ def uninstalled() {
 	log.debug("Uninstalling with settings: ${settings}")
 	if(state.scenes) {
 		// remove scene child devices
-		state.scenes = []
+		state.scenes = [:]
 	}
-	if(state.windows) {
+	if(state.shades) {
 		// remove window child devices
-		state.windows = []
+		state.shades = [:]
 	}
 	removeChildDevices(getChildDevices())
 }
@@ -67,30 +67,7 @@ def initialize() {
 		addgateway()
 	}
 
-	if(statusURL) {
-		try {
-			
-    		httpGet(statusURL) { resp ->
-        		resp.headers.each {
-        			log.debug "${it.name} : ${it.value}"
-    			}
-    			log.debug "response contentType: ${resp.contentType}"
-    			//log.trace "response data: ${resp.data}"
-    			if(resp.status == 200) {
-    				state.statusText = resp.data
-    			}
-    		}
-    		
-		} catch (e) {
-    			log.error "something went wrong: $e"
-		}
-	}
-
-	if(statusText) {
-		state.statusText = new StringReader(statusText)
- 	}
-
- 	doDeviceSync()
+ 	runEvery5Minutes(doDeviceSync)
 }
 
 def getHubId() {
@@ -201,12 +178,34 @@ private def parseEventMessage(String description) {
 /////////////////////////////////////
 def doDeviceSync(){
 	log.debug "Doing Platinum Gateway Device Sync!"
-	runIn(300, "doDeviceSync") //schedule to run again in 5 minutes
 
 	if(!state.subscribe) {
 		subscribe(location, null, locationHandler, [filterEvents:false])
 		state.subscribe = true
 	}
+
+	if(statusURL) {
+		try {
+			
+    		httpGet(statusURL) { resp ->
+        		resp.headers.each {
+        			log.debug "${it.name} : ${it.value}"
+    			}
+    			log.debug "response contentType: ${resp.contentType}"
+    			//log.trace "response data: ${resp.data}"
+    			if(resp.status == 200) {
+    				state.statusText = resp.data
+    			}
+    		}
+    		
+		} catch (e) {
+    			log.error "something went wrong: $e"
+		}
+	}
+
+	if(statusText) {
+		state.statusText = new StringReader(statusText)
+ 	}
 
 	updateStatus()
 }
@@ -270,7 +269,6 @@ def processState(info) {
 
 ////////////////////////////////////////////
 //CHILD DEVICE METHODS
-
 /////////////////////////////////////
 def parse(childDevice, description) {
 	def parsedEvent = parseEventMessage(description)
@@ -279,56 +277,6 @@ def parse(childDevice, description) {
 		def headerString = new String(parsedEvent.headers.decodeBase64())
 		def bodyString = new String(parsedEvent.body.decodeBase64())
 		log.debug "parse() - ${bodyString}"
-
-		def body = new groovy.json.JsonSlurper().parseText(bodyString)
-
-		if (body instanceof java.util.HashMap)
-		{ //poll response
-			def shades = getChildDevices()
-			def d = shades.find{it.label == body.name}
-			if (d) {
-				sendEvent(d.deviceNetworkId, [name: "switch", value: body?.action?.on ? "on" : "off"])
-				sendEvent(d.deviceNetworkId, [name: "level", value: Math.round(body.action.bri * 100 / 255)])
-				sendEvent(d.deviceNetworkId, [name: "saturation", value: Math.round(body.action.sat * 100 / 255)])
-				sendEvent(d.deviceNetworkId, [name: "hue", value: Math.min(Math.round(body.action.hue * 100 / 65535), 65535)])
-			}
-		}
-		else
-		{ //put response
-			body.each { payload ->
-				log.debug $payload
-				if (payload?.success)
-				{
-					def childDeviceNetworkId = app.id + "/"
-					def eventType
-					body?.success[0].each { k,v ->
-						childDeviceNetworkId += k.split("/")[2]
-						eventType = k.split("/")[4]
-						log.debug "eventType: $eventType"
-						switch(eventType) {
-							case "on":
-								sendEvent(childDeviceNetworkId, [name: "switch", value: (v == true) ? "on" : "off"])
-								break
-							case "bri":
-								sendEvent(childDeviceNetworkId, [name: "level", value: Math.round(v * 100 / 255)])
-								break
-							case "sat":
-								sendEvent(childDeviceNetworkId, [name: "saturation", value: Math.round(v * 100 / 255)])
-								break
-							case "hue":
-								sendEvent(childDeviceNetworkId, [name: "hue", value: Math.min(Math.round(v * 100 / 65535), 65535)])
-								break
-						}
-					}
-
-				}
-				else if (payload.error)
-				{
-					log.debug "JSON error - ${body?.error}"
-				}
-
-			}
-		}
 	} else {
 		log.debug "parse - got something other than headers,body..."
 		return []
@@ -353,7 +301,10 @@ def runScene(sceneID) {
 }
 
 def updateStatus() {
-	if(!state.statusText) return
+	if(!state.statusText) {
+		log.debug("statusText is empty - ${state.statusText}.")
+		return
+	}
 	log.debug ("Updating status")
 
 
