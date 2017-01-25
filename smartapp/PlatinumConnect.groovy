@@ -18,9 +18,10 @@ definition(
 
 preferences {
 	input("gatewayIP", "string", title:"Gateway IP Address", description: "Please enter your gateway's IP Address", required: true, displayDuringSetup: true)
-	input("statusURL", "string", title:"Gateway Status URL", description: "Please enter the URL to download status", required: false, displayDuringSetup: true)
-	input("statusText", "string", title:"Gateway Status Text", description: "Please copy paste the status Text", required: false, displayDuringSetup: true)
-
+	input("statusURL", "string", title:"Gateway Status URL", description: "Please enter the URL to download status", required: true, displayDuringSetup: true)
+	input("scenePrefix", "string", title:"Scene Name Prefix", description: "Please choose a prefix to add to all the Scenes", required: false, displayDuringSetup: true, defaultValue: "Shade Scene " )
+	input("shadePrefix", "string", title:"Shade Name Prefix", description: "Please choose a prefix to add to all the Shades", required: false, displayDuringSetup: true, defaultValue: "Shade " )
+	input("wantShades", "bool", title:"Do you want to add each Shade as a Switch?", description: "Choosing true or yes here will add one switch for EACH shade in your house", required: false, displayDuringSetup: true, defaultValue: false )
 }
 
 def makeNetworkId(ipaddr, port) { 
@@ -75,9 +76,6 @@ def getHubId() {
 }
 
 /////////////////////////////////////
-def addshades() {
-}
-
 def addgateway() {
 	if(!state.gatewayHex) {
 		state.gatewayHex = makeNetworkId(gatewayIP,522)
@@ -203,10 +201,6 @@ def doDeviceSync(){
 		}
 	}
 
-	if(statusText) {
-		state.statusText = new StringReader(statusText)
- 	}
-
 	updateStatus()
 }
 
@@ -227,7 +221,7 @@ def processState(info) {
     }
     
     line = line.drop(2)
-  	log.debug("processing line ${line}")
+  	//log.trace("processing line ${line}")
     if(line.startsWith("\$cr")) {
       // name of room
       def room_id = line[3..4]
@@ -300,15 +294,16 @@ def runScene(sceneID) {
 	sendMessage(msg)
 }
 
-def updateStatus() {
-	if(!state.statusText) {
-		log.debug("statusText is empty - ${state.statusText}.")
-		return
-	}
-	log.debug ("Updating status")
+def setShadeLevel(shadeID, percent) {
+	log.debug "Setting Shade level on Shade ${shadeID} to ${percent}%"
+	def shadeValue = 255 - (percent * 255.0).toInteger()
+	def msg = String.format("\$pss%s-04-%03d",shadeID,shadeValue)
+	sendMessage(msg)
+	runIn(5, "sendMessage", [overwrite: false, data:"\$rls"])
+}
 
-
-	def DB = processState(state.statusText)
+def updateScenes(DB) {
+	log.debug("Updating Scenes...")
 	if(!state.scenes) {
 		state.scenes = [:]
 	}
@@ -317,7 +312,7 @@ def updateStatus() {
 			// update device
 			if(DB['scenes'][id]['name'] != sceneDevice.label) {
 				log.debug("processing scene ${id} from name ${sceneDevice.label} to ${DB['scenes'][id]['name']}")
-				sceneDevice.setLabel(DB['scenes'][id]['name'])
+				sceneDevice.sendEvent(name:'label', value: DB['scenes'][id]['name'], isStateChange: true)
 			}
 			DB['scenes'].remove(id)
 		} else {
@@ -331,11 +326,56 @@ def updateStatus() {
 		log.debug("processing scene ${id} with name ${name}")
 		def PREFIX = "PLATINUMGATEWAYSCENE"
 		def hubId = getHubId()
-		def sceneDevice = addChildDevice("schwark", "Platinum Gateway Scene Switch", "${PREFIX}${id}", hubId, ["name": "PlatinumScene.${id}", "label": "Shade Scene ${name}", "completedSetup": true])
+		def sceneDevice = addChildDevice("schwark", "Platinum Gateway Scene Switch", "${PREFIX}${id}", hubId, ["name": "PlatinumScene.${id}", "label": "${scenePrefix}${name}", "completedSetup": true])
 		log.debug("created child device ${PREFIX}${id} for scene ${id} with name ${name} and hub ${hubId}")
 		sceneDevice.setSceneNo(id)
 		state.scenes[id] = sceneDevice
 	}
+}
+
+def updateShades(DB) {
+	if(!wantShades) return
+	log.debug("Updating Shades...")
+
+	if(!state.shades) {
+		state.shades = [:]
+	}
+	state.shades.each() { id, shadeDevice ->
+		if(DB['shades'][id]) {
+			// update device
+			if(DB['shades'][id]['name'] != shadeDevice.label) {
+				log.debug("processing shade ${id} from name ${shadeDevice.label} to ${DB['shades'][id]['name']}")
+				shadeDevice.sendEvent(name:'label', value: DB['shades'][id]['name'], isStateChange: true)
+			}
+			DB['shades'].remove(id)
+		} else {
+			// remove device
+			log.debug("removing shade ${id} from name ${shadeDevice.displayName}")
+			deleteChildDevice(shadeDevice.deviceNetworkId)
+		}
+	}
+	DB['shades']?.each() { id, shadeMap ->
+		def name = shadeMap['name']
+		log.debug("processing shade ${id} with name ${name}")
+		def PREFIX = "PLATINUMGATEWAYSHADE"
+		def hubId = getHubId()
+		def shadeDevice = addChildDevice("schwark", "Platinum Gateway Shade Switch", "${PREFIX}${id}", hubId, ["name": "PlatinumShade.${id}", "label": "${shadePrefix}${name}", "completedSetup": true])
+		log.debug("created child device ${PREFIX}${id} for shade ${id} with name ${name} and hub ${hubId}")
+		shadeDevice.setShadeNo(id)
+		state.shades[id] = shadeDevice
+	}
+}
+
+def updateStatus() {
+	if(!state.statusText) {
+		log.debug("statusText is empty - ${state.statusText}.")
+		return
+	}
+	log.debug ("Updating status")
+
+	def DB = processState(state.statusText)
+	updateScenes(DB)
+	updateShades(DB)
 }
 
 private Integer convertHexToInt(hex) {

@@ -50,10 +50,12 @@ def updated() {
 
 def on() {
 	return parent.runScene(state.sceneNo)
+	sendEvent(name: "switch", value: "on")
 }
 
 def off() {
 	return parent.runScene(state.sceneNo)
+	sendEvent(name: "switch", value: "off")
 }
 
 def setSceneNo(sceneNo) {
