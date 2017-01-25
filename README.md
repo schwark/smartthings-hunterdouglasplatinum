@@ -16,5 +16,5 @@ telnet on Windows:
 
 python:
 	
-	python getstatus.py > output.txt
+	python getstatus.py <ip-address-of-gateway> > output.txt
 
