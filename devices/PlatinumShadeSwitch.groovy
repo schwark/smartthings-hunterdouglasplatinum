@@ -69,13 +69,13 @@ def off() {
 }
 
 def setLevel(percent) {
+	parent.setShadeLevel(state.shadeNo, percent)
 	if(percent == 100) {
 		sendEvent(name: "switch", value: "on")
 	} else if (percent == 0) {
 		sendEvent(name: "switch", value: "off")
 	}
 	sendEvent(name: "level", value: percent)
-	parent.setShadeLevel(state.shadeNo, percent)
 }
 
 def setShadeNo(shadeNo) {

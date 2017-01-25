@@ -25,6 +25,7 @@ metadata {
 	definition (name: "Platinum Gateway Scene Switch", namespace: "schwark", author: "Schwark Satyavolu") {
 	capability "Switch"
 	command "setSceneNo", ["string"]
+	command "runScene"
 	}
 
 simulator {
@@ -48,13 +49,17 @@ preferences {
 def updated() {
 }
 
+def runScene() {
+	parent.runScene(state.sceneNo)
+}
+
 def on() {
-	return parent.runScene(state.sceneNo)
+	runScene()
 	sendEvent(name: "switch", value: "on")
 }
 
 def off() {
-	return parent.runScene(state.sceneNo)
+	runScene()
 	sendEvent(name: "switch", value: "off")
 }
 
