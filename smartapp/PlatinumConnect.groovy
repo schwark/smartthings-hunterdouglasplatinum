@@ -21,7 +21,7 @@ preferences {
 	input("statusURL", "string", title:"Gateway Status URL", description: "Please enter the URL to download status", required: true, displayDuringSetup: true)
 	input("scenePrefix", "string", title:"Scene Name Prefix", description: "Please choose a prefix to add to all the Scenes", required: false, displayDuringSetup: true, defaultValue: "Shade Scene " )
 	input("shadePrefix", "string", title:"Shade Name Prefix", description: "Please choose a prefix to add to all the Shades", required: false, displayDuringSetup: true, defaultValue: "Shade " )
-	input("wantShades", "bool", title:"Do you want to add each Shade as a Switch?", description: "Choosing true or yes here will add one switch for EACH shade in your house", required: false, displayDuringSetup: true, defaultValue: false )
+	input("wantShades", "bool", title:"Do you want to add each Shade as a Switch?", description: "Turning this on will add one switch for EACH shade in your house", required: false, displayDuringSetup: true, defaultValue: false )
 }
 
 def makeNetworkId(ipaddr, port) { 
@@ -39,6 +39,7 @@ def installed() {
 
 def uninstalled() {
 	log.debug("Uninstalling with settings: ${settings}")
+	unschedule()
 	if(state.scenes) {
 		// remove scene child devices
 		state.scenes = [:]
@@ -47,6 +48,7 @@ def uninstalled() {
 		// remove window child devices
 		state.shades = [:]
 	}
+
 	removeChildDevices(getChildDevices())
 }
 
@@ -90,15 +92,6 @@ def locationHandler(evt) {
 	def hub = evt?.hubId
 	state.hubId = hub
 	log.debug("location handler: event description is ${description}")
-
-	def parsedEvent = parseEventMessage(description)
-	parsedEvent << ["hub":hub]
-
-	if (parsedEvent.headers && parsedEvent.body) { // HUE gateway RESPONSES
-	}
-	else {
-		log.debug "GOT EVENT --- ${evt} --- NOT A HUE"
-	}
 }
 
 /////////////////////////////////////
@@ -108,69 +101,6 @@ private def parseEventMessage(Map event) {
 }
 
 private def parseEventMessage(String description) {
-	def event = [:]
-	def parts = description.split(',')
-	parts.each { part ->
-		part = part.trim()
-		if (part.startsWith('devicetype:')) {
-			def valueString = part.split(":")[1].trim()
-			event.devicetype = valueString
-		}
-		else if (part.startsWith('mac:')) {
-			def valueString = part.split(":")[1].trim()
-			if (valueString) {
-				event.mac = valueString
-			}
-		}
-		else if (part.startsWith('networkAddress:')) {
-			def valueString = part.split(":")[1].trim()
-			if (valueString) {
-				event.ip = valueString
-			}
-		}
-		else if (part.startsWith('deviceAddress:')) {
-			def valueString = part.split(":")[1].trim()
-			if (valueString) {
-				event.port = valueString
-			}
-		}
-		else if (part.startsWith('ssdpPath:')) {
-			def valueString = part.split(":")[1].trim()
-			if (valueString) {
-				event.ssdpPath = valueString
-			}
-		}
-		else if (part.startsWith('ssdpUSN:')) {
-			part -= "ssdpUSN:"
-			def valueString = part.trim()
-			if (valueString) {
-				event.ssdpUSN = valueString
-			}
-		}
-		else if (part.startsWith('ssdpTerm:')) {
-			part -= "ssdpTerm:"
-			def valueString = part.trim()
-			if (valueString) {
-				event.ssdpTerm = valueString
-			}
-		}
-		else if (part.startsWith('headers')) {
-			part -= "headers:"
-			def valueString = part.trim()
-			if (valueString) {
-				event.headers = valueString
-			}
-		}
-		else if (part.startsWith('body')) {
-			part -= "body:"
-			def valueString = part.trim()
-			if (valueString) {
-				event.body = valueString
-			}
-		}
-	}
-
-	event
 }
 
 /////////////////////////////////////
@@ -277,11 +207,11 @@ def parse(childDevice, description) {
 	}
 }
 
-def sendMessage(msg) {
+def sendMessage(params) {
 	def newDNI = state.gatewayHex
 	if(newDNI) {
-		log.debug("sending ${msg} to ${newDNI}")
-		def ha = new physicalgraph.device.HubAction(msg,physicalgraph.device.Protocol.LAN, newDNI)
+		log.debug("sending ${params.msg} to ${newDNI}")
+		def ha = new physicalgraph.device.HubAction(params.msg,physicalgraph.device.Protocol.LAN, newDNI)
 		sendHubCommand(ha)
 	}
 }
@@ -291,15 +221,16 @@ def runScene(sceneID) {
 	log.debug "Running Scene ${sceneID}"
 	sceneID = String.format('%02d',sceneID.toInteger())
 	def msg = "\$inm${sceneID}-"
-	sendMessage(msg)
+	sendMessage(["msg":msg])
 }
 
-def setShadeLevel(shadeID, percent) {
-	log.debug "Setting Shade level on Shade ${shadeID} to ${percent}%"
-	def shadeValue = 255 - (percent * 255.0).toInteger()
-	def msg = String.format("\$pss%s-04-%03d",shadeID,shadeValue)
-	sendMessage(msg)
-	runIn(5, "sendMessage", [overwrite: false, data:"\$rls"])
+def setShadeLevel(shadeNo, percent) {
+	log.debug "Setting Shade level on Shade ${shadeNo} to ${percent}%"
+	def shadeValue = 255 - (percent * 2.55).toInteger()
+	log.debug "Setting Shade level on Shade ${shadeNo} to ${shadeValue} value"
+	def msg = String.format("\$pss%s-04-%03d",shadeNo,shadeValue)
+	sendMessage(["msg":msg])
+	runIn(1, "sendMessage", [overwrite: false, data:["msg":"\$rls"]])
 }
 
 def updateScenes(DB) {
@@ -321,12 +252,16 @@ def updateScenes(DB) {
 			deleteChildDevice(sceneDevice.deviceNetworkId)
 		}
 	}
+	def namePrefix = scenePrefix
+	if(namePrefix) {
+		namePrefix = namePrefix.trim()+" "
+	}
 	DB['scenes']?.each() { id, sceneMap ->
 		def name = sceneMap['name']
 		log.debug("processing scene ${id} with name ${name}")
 		def PREFIX = "PLATINUMGATEWAYSCENE"
 		def hubId = getHubId()
-		def sceneDevice = addChildDevice("schwark", "Platinum Gateway Scene Switch", "${PREFIX}${id}", hubId, ["name": "PlatinumScene.${id}", "label": "${scenePrefix}${name}", "completedSetup": true])
+		def sceneDevice = addChildDevice("schwark", "Platinum Gateway Scene Switch", "${PREFIX}${id}", hubId, ["name": "PlatinumScene.${id}", "label": "${namePrefix}${name}", "completedSetup": true])
 		log.debug("created child device ${PREFIX}${id} for scene ${id} with name ${name} and hub ${hubId}")
 		sceneDevice.setSceneNo(id)
 		state.scenes[id] = sceneDevice
@@ -344,7 +279,7 @@ def updateShades(DB) {
 		if(DB['shades'][id]) {
 			// update device
 			if(DB['shades'][id]['name'] != shadeDevice.label) {
-				log.debug("processing shade ${id} from name ${shadeDevice.label} to ${DB['shades'][id]['name']}")
+				log.debug("processing shade rename ${id} from name ${shadeDevice.label} to ${DB['shades'][id]['name']}")
 				shadeDevice.sendEvent(name:'label', value: DB['shades'][id]['name'], isStateChange: true)
 			}
 			DB['shades'].remove(id)
@@ -354,12 +289,16 @@ def updateShades(DB) {
 			deleteChildDevice(shadeDevice.deviceNetworkId)
 		}
 	}
+	def namePrefix = shadePrefix
+	if(namePrefix) {
+		namePrefix = namePrefix.trim()+" "
+	}
 	DB['shades']?.each() { id, shadeMap ->
 		def name = shadeMap['name']
 		log.debug("processing shade ${id} with name ${name}")
 		def PREFIX = "PLATINUMGATEWAYSHADE"
 		def hubId = getHubId()
-		def shadeDevice = addChildDevice("schwark", "Platinum Gateway Shade Switch", "${PREFIX}${id}", hubId, ["name": "PlatinumShade.${id}", "label": "${shadePrefix}${name}", "completedSetup": true])
+		def shadeDevice = addChildDevice("schwark", "Platinum Gateway Shade Switch", "${PREFIX}${id}", hubId, ["name": "PlatinumShade.${id}", "label": "${namePrefix}${name}", "completedSetup": true])
 		log.debug("created child device ${PREFIX}${id} for shade ${id} with name ${name} and hub ${hubId}")
 		shadeDevice.setShadeNo(id)
 		state.shades[id] = shadeDevice
@@ -401,8 +340,8 @@ private List getRealHubFirmwareVersions()
 	return location.hubs*.firmwareVersionString.findAll { it }
 }
 
-private removeChildDevices(delete) {
-    delete.each {
+private removeChildDevices(data) {
+    data.delete.each {
         deleteChildDevice(it.deviceNetworkId)
     }
 }

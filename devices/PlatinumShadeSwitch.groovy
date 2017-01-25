@@ -43,7 +43,6 @@ tiles {
 }
 
 preferences {
-	input("shadeNo", "string", title:"Shade No", description: "Please enter your Shade No", required: true, displayDuringSetup: true)
 }
 
     main "switch"
@@ -56,7 +55,6 @@ def installed() {
 }
 
 def initialize() {
-	state.shadeNo = shadeNo
 }
 
 def updated() {
@@ -70,27 +68,14 @@ def off() {
 	return setLevel(0)
 }
 
-def sendMessage(msg) {
-	log.debug("sending message ${msg.msg} with ${device.deviceNetworkId}")
-	def ha = new physicalgraph.device.HubAction(msg.msg,physicalgraph.device.Protocol.LAN)
-	sendHubCommand(ha)
-}
-
 def setLevel(percent) {
-	log.debug "Setting Shade level on Shade ${shadeNo} to ${percent}%"
-	def shadeValue = 255 - (percent * 2.55).toInteger()
-	log.debug "Setting Shade level on Shade ${shadeNo} to ${shadeValue} value"
-	def msg = String.format("\$pss%s-04-%03d",shadeNo,shadeValue)
-	sendMessage(["msg":msg])
-	runIn(5, "sendMessage", [overwrite: false, data:[msg:"\$rls"]])
-
-	//parent.setShadeLevel(state.shadeNo, percent)
 	if(percent == 100) {
 		sendEvent(name: "switch", value: "on")
 	} else if (percent == 0) {
 		sendEvent(name: "switch", value: "off")
 	}
 	sendEvent(name: "level", value: percent)
+	parent.setShadeLevel(state.shadeNo, percent)
 }
 
 def setShadeNo(shadeNo) {
