@@ -13,11 +13,11 @@ def create_socket(server):
     sock = None
   return sock
 
-def socket_com(message, sentinel=None, sock=None):
+def socket_com(server, message, sentinel=None, sock=None):
   content = None
   try:
     if not sock:
-      sock = create_socket()
+      sock = create_socket(server)
       sock.sendall(message)
       content = recv_until(sock, sentinel)
   except socket.error:
@@ -40,7 +40,7 @@ def recv_until(sock, sentinel=None):
   return info
 
 def get_status(server):
-	return socket_com("$dat", "upd01-")
+	return socket_com(server, "$dat", "upd01-")
 
 def main():
 	if(len(sys.argv) < 2):
