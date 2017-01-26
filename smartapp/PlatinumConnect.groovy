@@ -23,6 +23,7 @@ preferences {
 	input("shadePrefix", "string", title:"Shade Name Prefix", description: "Please choose a prefix to add to all the Shades", required: false, displayDuringSetup: true, defaultValue: "Shade " )
 	input("wantShades", "bool", title:"Do you want to add each Shade as a Switch?", description: "Turning this on will add one switch for EACH shade in your house", required: false, displayDuringSetup: true, defaultValue: false )
 	input("commandRepeat", "number", title:"Gateway Command Repeats", description: "Choosing 1 here will execute each command twice (1 command + 1 repeat)", required: false, displayDuringSetup: true, defaultValue: 0 )
+	input("commandInterval", "number", title:"Gateway Command Repeat Interval", description: "Time (in seconds) to wait between command repeats", required: false, displayDuringSetup: true, defaultValue: 5 )
 }
 
 def makeNetworkId(ipaddr, port) { 
@@ -226,7 +227,7 @@ def runScene(sceneID) {
 	if(commandRepeat > 0) {
 		1.upto(commandRepeat) {
 			log.debug("adding another repeat for command ${msg} after ${3*it} seconds")
-			runIn(3*it, "sendMessage", [overwrite: false, data:["msg":msg]])
+			runIn(commandInterval*it, "sendMessage", [overwrite: false, data:["msg":msg]])
 		}
 	}
 }
