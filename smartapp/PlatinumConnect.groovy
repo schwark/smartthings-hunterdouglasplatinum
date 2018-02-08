@@ -144,6 +144,10 @@ def processState(info) {
 
   info.eachLine() { line ->
     line = line.trim()
+    if(!line) {
+       return 
+    }
+    
     if(!prefix) {
       prefix = line[0..1]
       log.debug("prefix is set to ${prefix}")
