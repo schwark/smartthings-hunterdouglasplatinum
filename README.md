@@ -18,3 +18,16 @@ python:
 	
 	python getstatus.py <ip-address-of-gateway> > output.txt
 
+
+* Github integration (first need to enable [github integration](http://docs.smartthings.com/en/latest/tools-and-ide/github-integration.html))
+```
+Click on My SmartApps/Settings/Add new repository
+Owner: schwark, Name: smartthings-hunterdouglasplatinum, Branch: master
+Save
+Update from Repo / smartthings-hunterdouglasplatinum (master)
+Check all the ones under New and Obsolete
+Check Publish checkbox at the bottom (next the Cancel button)
+Click Execute update
+```
+
+
